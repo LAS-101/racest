@@ -6,15 +6,12 @@
 #include <algorithm>
 using namespace std;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Pixel width of the first n chars of s at given font size
 static int partWidth(const string& s, int n, int size) {
     if (n <= 0) return 0;
     return MeasureText(s.substr(0, n).c_str(), size);
 }
 
-// ─── Stars ────────────────────────────────────────────────────────────────────
 static void drawStars(float now) {
     for (const auto& s : g_stars) {
         float t   = 0.5f + 0.5f * sinf(now * s.twinkSpeed + s.phase);
@@ -23,22 +20,18 @@ static void drawStars(float now) {
     }
 }
 
-// ─── Single word ──────────────────────────────────────────────────────────────
 static void drawWord(const Word& w) {
     int px   = (int)w.x;
     int py   = (int)w.y - FONT_SIZE / 2;
     int xOff = 0;
 
-    // Typed prefix in green
     if (w.typed > 0) {
         DrawText(w.text.substr(0, w.typed).c_str(), px, py, FONT_SIZE, COL_TYPED);
         xOff = partWidth(w.text, w.typed, FONT_SIZE);
     }
 
-    // Remaining characters
     if (w.typed < (int)w.text.size()) {
         if (w.errored) {
-            // Current char in red — wrong key was pressed
            string cur(1, w.text[w.typed]);
             DrawText(cur.c_str(), px + xOff, py, FONT_SIZE, COL_ERROR);
             xOff += MeasureText(cur.c_str(), FONT_SIZE);
@@ -49,7 +42,6 @@ static void drawWord(const Word& w) {
             if (w.targeted) {
                 col = COL_TARGET;
             } else {
-                // Tint toward red as word approaches danger line
                 float prox = 1.0f - min((w.x - DANGER_X) / 360.0f, 1.0f);
                 prox = max(0.0f, prox);
                 col  = {
@@ -64,7 +56,6 @@ static void drawWord(const Word& w) {
     }
 }
 
-// ─── HUD (score, time, best) ─────────────────────────────────────────────────
 static void drawHUD() {
     char scoreBuf[64], timeBuf[32], hsBuf[64];
     snprintf(scoreBuf, sizeof(scoreBuf), "SCORE  %d", g_score);
@@ -80,13 +71,11 @@ static void drawHUD() {
     DrawText(timeBuf, SW/2 - tw/2, 18, 20, COL_UNTYPED);
 }
 
-// ─── Danger zone ─────────────────────────────────────────────────────────────
 static void drawDangerZone() {
     DrawRectangle(0, 0, (int)DANGER_X, SH, {160, 15, 15, 22});
     DrawLineEx({DANGER_X, 0}, {DANGER_X, (float)SH}, 1.5f, COL_DANGER);
 }
 
-// ─── Menu screen ─────────────────────────────────────────────────────────────
 static void drawMenu(float now) {
     const char* title = "RACEST";
     int tw = MeasureText(title, 80);
@@ -115,7 +104,6 @@ static void drawMenu(float now) {
 }
 
 static void drawGameOver(float now) {
-    // Dark overlay on top of the still-visible game
     DrawRectangle(0, 0, SW, SH, {0, 0, 0, 160});
 
     const char* goTxt = "GAME  OVER";

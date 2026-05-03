@@ -8,7 +8,7 @@ int main() {
     InitWindow(SW, SH, "RACEST");
     SetTargetFPS(60);
 
-    initGame();   // load word bank + stars + high score from disk
+    initGame();   
 
     while (!WindowShouldClose()) {
         updateGame(GetFrameTime());
