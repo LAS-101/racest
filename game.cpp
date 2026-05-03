@@ -11,7 +11,6 @@ using namespace std;
 static const char* SAVE_PATH  = "highscore.dat";
 static const char* WORDS_PATH = "words.txt";
 
-// ─── Global definitions ───────────────────────────────────────────────────────
 vector<string> g_wordBank;
 vector<Star>        g_stars;
 vector<Word>        g_words;
@@ -25,7 +24,6 @@ int     g_targetIdx  = -1;
 static float        g_spawnTimer = 0.0f;
 static mt19937 g_rng([] { random_device rd; return rd(); }());
 
-// ─── Persistence ─────────────────────────────────────────────────────────────
 static int loadHighScore() {
     ifstream f(SAVE_PATH);
     int v = 0;
@@ -38,7 +36,6 @@ static void saveHighScore(int v) {
     if (f.is_open()) f << v;
 }
 
-// ─── Word bank ────────────────────────────────────────────────────────────────
 static vector<string> loadWordBank() {
     vector<string> bank;
     ifstream f(WORDS_PATH);
@@ -52,7 +49,7 @@ static vector<string> loadWordBank() {
             bank.push_back(clean);
     }
     if (bank.empty()) {
-        // Fallback if words.txt is missing
+        
         bank = {
             "the","and","for","are","not","you","all","can","day","see",
             "run","sky","star","dark","type","fast","word","game","play",
@@ -78,7 +75,6 @@ static vector<string> loadWordBank() {
     return bank;
 }
 
-// ─── Stars ────────────────────────────────────────────────────────────────────
 static void initStars() {
     g_stars.clear();
     g_stars.reserve(260);
@@ -90,7 +86,6 @@ static void initStars() {
         g_stars.push_back({rx(g_rng), ry(g_rng), rr(g_rng), rp(g_rng), rs(g_rng)});
 }
 
-// ─── Difficulty curves ────────────────────────────────────────────────────────
 static float wordSpeed(float elapsed) {
     float base = 88.0f + min(elapsed * 0.64f, 182.0f);
     uniform_real_distribution<float> jitter(-14.0f, 14.0f);
@@ -117,7 +112,6 @@ static string pickWord(float elapsed) {
     return pool[d(g_rng)];
 }
 
-// ─── Word spawning ────────────────────────────────────────────────────────────
 static void spawnWord() {
     if ((int)g_words.size() >= MAX_WORDS) return;
 
@@ -144,7 +138,6 @@ static void spawnWord() {
     g_words.push_back(w);
 }
 
-// ─── State transitions ────────────────────────────────────────────────────────
 static void triggerGameOver() {
     if (g_score > g_highScore) {
         g_highScore = g_score;
@@ -171,12 +164,10 @@ void initGame() {
     initStars();
 }
 
-// ─── Input handling ───────────────────────────────────────────────────────────
 static void handleInput() {
     if (g_targetIdx >= 0 && g_targetIdx < (int)g_words.size()) {
         Word& tw = g_words[g_targetIdx];
 
-        // Backspace — remove last typed char or clear error
         if (IsKeyPressed(KEY_BACKSPACE)) {
             if (tw.errored) {
                 tw.errored = false;
@@ -189,7 +180,6 @@ static void handleInput() {
             }
         }
 
-        // Character input
         int ch;
         while ((ch = GetCharPressed()) != 0) {
             if (tw.errored) break;
@@ -198,7 +188,6 @@ static void handleInput() {
             char key = (char)tolower(ch);
             if (key == tw.text[tw.typed]) {
                 tw.typed++;
-                // Word complete
                 if (tw.typed == (int)tw.text.size()) {
                     g_score += 10 + (int)(tw.speed / 14.0f);
                     g_words.erase(g_words.begin() + g_targetIdx);
@@ -212,7 +201,6 @@ static void handleInput() {
         }
 
     } else {
-        // No target — lock onto a word by typing its first letter
         int ch;
         if ((ch = GetCharPressed()) != 0) {
             char key = (char)tolower(ch);
@@ -230,7 +218,6 @@ static void handleInput() {
                 g_targetIdx              = best;
                 g_words[best].targeted   = true;
                 g_words[best].typed      = 1;
-                // Handle immediate completion (1-char word)
                 if (g_words[best].typed == (int)g_words[best].text.size()) {
                     g_score += 10 + (int)(g_words[best].speed / 14.0f);
                     g_words.erase(g_words.begin() + best);
@@ -241,16 +228,13 @@ static void handleInput() {
     }
 }
 
-// ─── Main update ──────────────────────────────────────────────────────────────
 void updateGame(float dt) {
     if (g_state == GState::PLAYING) {
         g_time += dt;
 
-        // Move all words leftward
         for (auto& w : g_words)
             w.x -= w.speed * dt;
 
-        // Game over if any word crosses the danger line
         for (const auto& w : g_words) {
             if (w.x < DANGER_X) {
                 triggerGameOver();
@@ -258,7 +242,6 @@ void updateGame(float dt) {
             }
         }
 
-        // Spawn timer
         g_spawnTimer += dt;
         if (g_spawnTimer >= spawnInterval(g_time)) {
             g_spawnTimer = 0.0f;
@@ -268,7 +251,6 @@ void updateGame(float dt) {
         handleInput();
 
     } else {
-        // MENU or GAMEOVER — wait for Enter / Space
         if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE))
             startGame();
     }
