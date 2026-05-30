@@ -4,7 +4,7 @@ A fast-paced typing game where words race across the screen from right to left. 
 
 ## Overview
 
-**RACEST** is a real-time typing challenge game built with C++ and [raylib](https://www.raylib.com/). Words spawn randomly on the screen and move leftward at increasing speeds. Players must type each word's first letter to lock onto it, then complete the word by typing the remaining characters before it crosses the danger line.
+**RACEST** is a real-time typing challenge game built with C++ and [raylib](https://www.raylib.com/). Words spawn randomly on the screen and move leftward at increasing speeds. Players must type each word's first letter to lock onto it, then complete the word by typing the remaining characters before it crosses the danger line on the left.
 
 - **Dynamic difficulty**: Word speed and spawn rate increase over time
 - **Scoring system**: Quick completions earn more points
@@ -21,8 +21,10 @@ A fast-paced typing game where words race across the screen from right to left. 
 
 
 ## Running the Game
+From the repository root, compile the sources in the `src/` directory:
+
 ```bash
-g++ main.cpp game.cpp renderer.cpp -o racest \
+g++ src/main.cpp src/game.cpp src/renderer.cpp -o racest \
     -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -std=c++17
 ```
 
@@ -30,7 +32,7 @@ g++ main.cpp game.cpp renderer.cpp -o racest \
 ./racest
 ```
 
-The game window opens at 1280×720 pixels. A `words.txt` file (containing one word per line) should be in the same directory as the executable. If missing, the game uses a built-in fallback word list.
+The game window opens at 1280×720 pixels. A `Words.txt` file (containing one word per line) should be placed next to the executable (the repository contains `Words.txt` at the project root). If missing, the game uses a built-in fallback word list.
 
 ## How to Play
 
@@ -62,28 +64,30 @@ Press **Enter** or **Space** to play again.
   - Gold: high score display
 - **Real-time HUD**: Score, time, and best score
 - **Adaptive difficulty**: Word selection based on elapsed time
-- **Persistent high scores**: Saved to `highscore.dat`
+- **Persistent high scores**: Saved to `highscore.dat` (created next to the executable)
 
 ## Project Structure
 
 ```
 .
-├── main.cpp        # Entry point, window setup
-├── game.h          # Game state and declarations
-├── game.cpp        # Game logic, input handling, physics
-├── types.h         # Color palette, constants, structs (Star, Word, GState)
-├── renderer.h      # Rendering declarations
-├── renderer.cpp    # Drawing logic (HUD, words, menu, game over)
-├── words.txt       # Word list (one word per line)
-├── highscore.dat   # Saved high score (auto-created)
-└── README.md       # This file
+├── Makefile
+├── README.md
+├── Words.txt       # Word list (one word per line)
+├── highscore.dat   # Saved high score (auto-created when running)
+└── src/
+    ├── main.cpp        # Entry point, window setup
+    ├── game.h          # Game state and declarations
+    ├── game.cpp        # Game logic, input handling, physics
+    ├── types.h         # Color palette, constants, structs (Star, Word, GState)
+    ├── renderer.h      # Rendering declarations
+    └── renderer.cpp    # Drawing logic (HUD, words, menu, game over)
 ```
 
 ## Technical Details
 
 ### Architecture
 
-- **Modular design**: Separated game logic (game.cpp), rendering (renderer.cpp), and types
+- **Modular design**: Separated game logic (`src/game.cpp`), rendering (`src/renderer.cpp`), and types (`src/types.h`)
 - **Global game state**: Managed through extern variables (g_words, g_state, g_score, etc.)
 - **Spawn rate scaling**: Gradually reduces spawn interval from 3.3s to 1.1s
 - **Speed curve**: Word speed ramps from ~88 px/s to ~270 px/s
@@ -98,28 +102,20 @@ Press **Enter** or **Space** to play again.
 
 ## Controls
 
-| Key | Action |
-|-----|--------|
-| **A-Z** | Type letters to lock on and complete words |
-| **Backspace** | Remove last typed character or clear error |
-| **Enter / Space** | Start game or replay after game over |
-| **Esc** | Close window (raylib default) |
+ - **A-Z**: Type letters to lock on and complete words
+ - **Backspace**: Remove last typed character or clear error
+ - **Enter / Space**: Start game or replay after game over
+ - **Esc**: Close window (raylib default)
 
 ## Customization
 
 ### Colors
 
-Edit the color constants in [types.h](types.h):
-
-```cpp
-inline const Color COL_BG      = {  0,   0,   0, 255};   // black background
-inline const Color COL_TYPED   = { 68, 198, 110, 255};   // green typed
-// ... etc
-```
+Edit the color constants in `src/types.h`.
 
 ### Difficulty
 
-Adjust these in [game.cpp](game.cpp):
+Adjust these in `src/game.cpp`:
 
 - `wordSpeed()`: Change the speed ramp curve
 - `spawnInterval()`: Adjust how often new words appear
@@ -128,7 +124,7 @@ Adjust these in [game.cpp](game.cpp):
 
 ### Screen Size
 
-Modify in [types.h](types.h):
+Modify in `src/types.h`:
 
 ```cpp
 inline constexpr int SW = 1280;  // screen width
@@ -148,7 +144,7 @@ inline constexpr int SH = 720;   // screen height
 
 ## Building with Your Own Word List
 
-Replace or supplement [words.txt](words.txt) (one word per line, alphanumeric only). The game automatically filters and normalizes words (3+ characters, lowercase).
+Replace or supplement `Words.txt` (one word per line, alphanumeric only). The game automatically filters and normalizes words (3+ characters, lowercase).
 
 ## License
 
