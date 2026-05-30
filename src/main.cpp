@@ -8,14 +8,16 @@ int main() {
     InitWindow(SW, SH, "RACEST");
     SetTargetFPS(60);
 
-    initGame();   
+    Game game;
+    Renderer renderer;
+    game.init();
 
     while (!WindowShouldClose()) {
-        updateGame(GetFrameTime());
+        game.update(GetFrameTime());
 
         BeginDrawing();
         ClearBackground(COL_BG);
-        drawFrame((float)GetTime());
+        renderer.drawFrame(game, (float)GetTime());
         EndDrawing();
     }
 

@@ -2,41 +2,32 @@
 #include "raylib.h"
 #include <fstream>
 #include <algorithm>
-#include <random>
 #include <cmath>
 #include <cstdio>
 #include <cctype>
+#include <chrono>
 using namespace std;
 
 static const char* SAVE_PATH  = "highscore.dat";
 static const char* WORDS_PATH = "words.txt";
 
-vector<string> g_wordBank;
-vector<Star>        g_stars;
-vector<Word>        g_words;
-GState  g_state      = GState::MENU;
-float   g_time       = 0.0f;
-int     g_score      = 0;
-int     g_highScore  = 0;
-bool    g_newRecord  = false;
-int     g_targetIdx  = -1;
+Game::Game()
+    : m_state(GState::MENU), m_time(0.0f), m_score(0), m_highScore(0), m_newRecord(false),
+      m_targetIdx(-1), m_spawnTimer(0.0f), m_rng((random_device())()) {}
 
-static float        g_spawnTimer = 0.0f;
-static mt19937 g_rng([] { random_device rd; return rd(); }());
-
-static int loadHighScore() {
+int Game::loadHighScore() {
     ifstream f(SAVE_PATH);
     int v = 0;
     if (f.is_open()) f >> v;
     return v;
 }
 
-static void saveHighScore(int v) {
+void Game::saveHighScore(int v) {
     ofstream f(SAVE_PATH);
     if (f.is_open()) f << v;
 }
 
-static vector<string> loadWordBank() {
+vector<string> Game::loadWordBank() {
     vector<string> bank;
     ifstream f(WORDS_PATH);
     string w;
@@ -49,7 +40,6 @@ static vector<string> loadWordBank() {
             bank.push_back(clean);
     }
     if (bank.empty()) {
-        
         bank = {
             "the","and","for","are","not","you","all","can","day","see",
             "run","sky","star","dark","type","fast","word","game","play",
@@ -75,54 +65,54 @@ static vector<string> loadWordBank() {
     return bank;
 }
 
-static void initStars() {
-    g_stars.clear();
-    g_stars.reserve(260);
+void Game::initStars() {
+    m_stars.clear();
+    m_stars.reserve(260);
     uniform_real_distribution<float> rx(0, SW), ry(0, SH);
     uniform_real_distribution<float> rr(0.4f, 2.5f);
     uniform_real_distribution<float> rp(0.0f, 6.283f);
     uniform_real_distribution<float> rs(0.35f, 2.7f);
     for (int i = 0; i < 260; ++i)
-        g_stars.push_back({rx(g_rng), ry(g_rng), rr(g_rng), rp(g_rng), rs(g_rng)});
+        m_stars.push_back({rx(m_rng), ry(m_rng), rr(m_rng), rp(m_rng), rs(m_rng)});
 }
 
-static float wordSpeed(float elapsed) {
+float Game::wordSpeed(float elapsed) {
     float base = 88.0f + min(elapsed * 0.64f, 182.0f);
     uniform_real_distribution<float> jitter(-14.0f, 14.0f);
-    return base + jitter(g_rng);
+    return base + jitter(m_rng);
 }
 
-static float spawnInterval(float elapsed) {
+float Game::spawnInterval(float elapsed) {
     return max(1.1f, 3.3f - elapsed * 0.014f);
 }
 
-static string pickWord(float elapsed) {
+string Game::pickWord(float elapsed) {
     float diff   = elapsed / 55.0f;
     int   minLen = 3 + min((int)(diff * 2.0f), 5);
     int   maxLen = minLen + 4;
 
     vector<string> pool;
-    for (const auto& w : g_wordBank) {
+    for (const auto& w : m_wordBank) {
         int l = (int)w.size();
         if (l >= minLen && l <= maxLen) pool.push_back(w);
     }
-    if (pool.empty()) pool = g_wordBank;
+    if (pool.empty()) pool = m_wordBank;
 
     uniform_int_distribution<int> d(0, (int)pool.size() - 1);
-    return pool[d(g_rng)];
+    return pool[d(m_rng)];
 }
 
-static void spawnWord() {
-    if ((int)g_words.size() >= MAX_WORDS) return;
+void Game::spawnWord() {
+    if ((int)m_words.size() >= MAX_WORDS) return;
 
-    string txt = pickWord(g_time);
+    string txt = pickWord(m_time);
 
     uniform_real_distribution<float> yd(48.0f, SH - 72.0f);
-    float y = yd(g_rng);
+    float y = yd(m_rng);
     for (int attempt = 0; attempt < 25; ++attempt) {
-        float candidate = yd(g_rng);
+        float candidate = yd(m_rng);
         bool  ok        = true;
-        for (const auto& w : g_words)
+        for (const auto& w : m_words)
             if (abs(w.y - candidate) < 46.0f) { ok = false; break; }
         if (ok) { y = candidate; break; }
     }
@@ -133,40 +123,40 @@ static void spawnWord() {
     w.errored  = false;
     w.x        = (float)SW + 24.0f;
     w.y        = y;
-    w.speed    = wordSpeed(g_time);
+    w.speed    = wordSpeed(m_time);
     w.targeted = false;
-    g_words.push_back(w);
+    m_words.push_back(w);
 }
 
-static void triggerGameOver() {
-    if (g_score > g_highScore) {
-        g_highScore = g_score;
-        g_newRecord = true;
-        saveHighScore(g_highScore);
+void Game::triggerGameOver() {
+    if (m_score > m_highScore) {
+        m_highScore = m_score;
+        m_newRecord = true;
+        saveHighScore(m_highScore);
     }
-    g_state = GState::GAMEOVER;
+    m_state = GState::GAMEOVER;
 }
 
-void startGame() {
-    g_words.clear();
-    g_time       = 0.0f;
-    g_score      = 0;
-    g_newRecord  = false;
-    g_spawnTimer = 0.0f;
-    g_targetIdx  = -1;
-    g_state      = GState::PLAYING;
+void Game::start() {
+    m_words.clear();
+    m_time       = 0.0f;
+    m_score      = 0;
+    m_newRecord  = false;
+    m_spawnTimer = 0.0f;
+    m_targetIdx  = -1;
+    m_state      = GState::PLAYING;
     spawnWord();
 }
 
-void initGame() {
-    g_wordBank  = loadWordBank();
-    g_highScore = loadHighScore();
+void Game::init() {
+    m_wordBank  = loadWordBank();
+    m_highScore = loadHighScore();
     initStars();
 }
 
-static void handleInput() {
-    if (g_targetIdx >= 0 && g_targetIdx < (int)g_words.size()) {
-        Word& tw = g_words[g_targetIdx];
+void Game::handleInput() {
+    if (m_targetIdx >= 0 && m_targetIdx < (int)m_words.size()) {
+        Word& tw = m_words[m_targetIdx];
 
         if (IsKeyPressed(KEY_BACKSPACE)) {
             if (tw.errored) {
@@ -175,7 +165,7 @@ static void handleInput() {
                 tw.typed--;
                 if (tw.typed == 0) {
                     tw.targeted = false;
-                    g_targetIdx = -1;
+                    m_targetIdx = -1;
                 }
             }
         }
@@ -189,9 +179,9 @@ static void handleInput() {
             if (key == tw.text[tw.typed]) {
                 tw.typed++;
                 if (tw.typed == (int)tw.text.size()) {
-                    g_score += 10 + (int)(tw.speed / 14.0f);
-                    g_words.erase(g_words.begin() + g_targetIdx);
-                    g_targetIdx = -1;
+                    m_score += 10 + (int)(tw.speed / 14.0f);
+                    m_words.erase(m_words.begin() + m_targetIdx);
+                    m_targetIdx = -1;
                     break;
                 }
             } else {
@@ -207,44 +197,44 @@ static void handleInput() {
 
             int   best  = -1;
             float bestX = (float)SW + 1.0f;
-            for (int i = 0; i < (int)g_words.size(); ++i) {
-                const auto& w = g_words[i];
+            for (int i = 0; i < (int)m_words.size(); ++i) {
+                const auto& w = m_words[i];
                 if (!w.text.empty() && w.text[0] == key && w.x < bestX) {
                     bestX = w.x;
                     best  = i;
                 }
             }
             if (best >= 0) {
-                g_targetIdx              = best;
-                g_words[best].targeted   = true;
-                g_words[best].typed      = 1;
-                if (g_words[best].typed == (int)g_words[best].text.size()) {
-                    g_score += 10 + (int)(g_words[best].speed / 14.0f);
-                    g_words.erase(g_words.begin() + best);
-                    g_targetIdx = -1;
+                m_targetIdx              = best;
+                m_words[best].targeted   = true;
+                m_words[best].typed      = 1;
+                if (m_words[best].typed == (int)m_words[best].text.size()) {
+                    m_score += 10 + (int)(m_words[best].speed / 14.0f);
+                    m_words.erase(m_words.begin() + best);
+                    m_targetIdx = -1;
                 }
             }
         }
     }
 }
 
-void updateGame(float dt) {
-    if (g_state == GState::PLAYING) {
-        g_time += dt;
+void Game::update(float dt) {
+    if (m_state == GState::PLAYING) {
+        m_time += dt;
 
-        for (auto& w : g_words)
+        for (auto& w : m_words)
             w.x -= w.speed * dt;
 
-        for (const auto& w : g_words) {
+        for (const auto& w : m_words) {
             if (w.x < DANGER_X) {
                 triggerGameOver();
                 return;
             }
         }
 
-        g_spawnTimer += dt;
-        if (g_spawnTimer >= spawnInterval(g_time)) {
-            g_spawnTimer = 0.0f;
+        m_spawnTimer += dt;
+        if (m_spawnTimer >= spawnInterval(m_time)) {
+            m_spawnTimer = 0.0f;
             spawnWord();
         }
 
@@ -252,6 +242,15 @@ void updateGame(float dt) {
 
     } else {
         if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE))
-            startGame();
+            start();
     }
 }
+
+// Accessors
+const std::vector<Star>& Game::stars() const { return m_stars; }
+const std::vector<Word>& Game::words() const { return m_words; }
+float Game::timeElapsed() const { return m_time; }
+int Game::score() const { return m_score; }
+int Game::highScore() const { return m_highScore; }
+bool Game::newRecord() const { return m_newRecord; }
+GState Game::state() const { return m_state; }

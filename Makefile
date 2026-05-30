@@ -1,8 +1,8 @@
 CXX := g++
-CXXFLAGS := -std=c++17 -O2 -Wall -Wextra
+CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -Isrc
 LDFLAGS := -lraylib -pthread -lm -ldl
 
-SRCS := main.cpp game.cpp renderer.cpp
+SRCS := src/main.cpp src/game.cpp src/renderer.cpp
 OBJS := $(SRCS:.cpp=.o)
 TARGET := racest
 
@@ -20,4 +20,4 @@ run: all
 	./$(TARGET)
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) main.o game.o renderer.o $(TARGET)
