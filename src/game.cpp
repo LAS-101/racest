@@ -8,23 +8,52 @@
 #include <chrono>
 using namespace std;
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+
+EM_JS(int, loadBrowserHighScore, (), {
+    try {
+        const value = Number(localStorage.getItem('racest.highscore'));
+        return Number.isInteger(value) && value >= 0 && value <= 2147483647 ? value : 0;
+    } catch (error) {
+        return 0;
+    }
+});
+
+EM_JS(void, saveBrowserHighScore, (int value), {
+    try {
+        localStorage.setItem('racest.highscore', String(value));
+    } catch (error) {
+        // Storage can be disabled; the current session still keeps its score.
+    }
+});
+#else
 static const char* SAVE_PATH  = "highscore.dat";
-static const char* WORDS_PATH = "words.txt";
+#endif
+static const char* WORDS_PATH = "Words.txt";
 
 Game::Game()
     : m_state(GState::MENU), m_time(0.0f), m_score(0), m_highScore(0), m_newRecord(false),
       m_targetIdx(-1), m_spawnTimer(0.0f), m_rng((random_device())()) {}
 
 int Game::loadHighScore() {
+#if defined(__EMSCRIPTEN__)
+    return loadBrowserHighScore();
+#else
     ifstream f(SAVE_PATH);
     int v = 0;
     if (f.is_open()) f >> v;
     return v;
+#endif
 }
 
 void Game::saveHighScore(int v) {
+#if defined(__EMSCRIPTEN__)
+    saveBrowserHighScore(v);
+#else
     ofstream f(SAVE_PATH);
     if (f.is_open()) f << v;
+#endif
 }
 
 vector<string> Game::loadWordBank() {

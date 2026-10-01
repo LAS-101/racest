@@ -21,6 +21,58 @@ A fast-paced typing game where words race across the screen from right to left. 
 
 
 ## Running the Game
+
+### Browser (WebAssembly)
+
+The same C++ game runs in a browser using Emscripten and raylib's web backend.
+Install Git, CMake (3.16+), Make, Python 3, and the
+[Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html).
+For example, install the tested compiler version in a directory of your choice:
+
+```bash
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+./emsdk install 4.0.23
+./emsdk activate 4.0.23
+source ./emsdk_env.sh
+```
+
+Then, from the RACEST repository in that same terminal:
+
+```bash
+make serve-web
+```
+
+Open **http://localhost:8000**. Click the game and press Enter or Space to start.
+Use a desktop browser with WebAssembly, WebGL, and a physical keyboard. Switching
+tabs/windows pauses gameplay. Press Ctrl+C in the terminal to stop the server.
+Source `/path/to/emsdk/emsdk_env.sh` again when opening a new terminal.
+
+To build without starting the server:
+
+```bash
+make web
+# Equivalent commands (also usable without Make):
+emcmake cmake -S . -B build/web -DCMAKE_BUILD_TYPE=Release
+cmake --build build/web --parallel
+```
+
+The first build downloads raylib **5.5** and compiles it for WebAssembly; a native
+raylib installation is not needed for this target. `Words.txt` is bundled in the
+generated data file. Rebuilding after editing it updates the bundled word list.
+
+To publish, upload **all four files** from `build/web/public/` (`index.html`,
+`index.js`, `index.wasm`, and `index.data`) together to a static web host such as
+GitHub Pages or itch.io (HTML game). Serve them over HTTP/HTTPS; opening
+`index.html` directly with `file://` will not work. The host should serve `.wasm`
+as `application/wasm`. No backend or cross-origin isolation headers are required.
+
+Browser high scores use `localStorage` for the current site and browser profile,
+separately from desktop `highscore.dat`. Clearing site data clears the score;
+when storage is blocked, the score remains available only for the current session.
+
+### Desktop
+
 From the repository root, compile the sources in the `src/` directory:
 
 ```bash
@@ -64,14 +116,16 @@ Press **Enter** or **Space** to play again.
   - Gold: high score display
 - **Real-time HUD**: Score, time, and best score
 - **Adaptive difficulty**: Word selection based on elapsed time
-- **Persistent high scores**: Saved to `highscore.dat` (created next to the executable)
+- **Persistent high scores**: Saved to `highscore.dat` on desktop or browser local storage on web
 
 ## Project Structure
 
 ```
 .
 ├── Makefile
+├── CMakeLists.txt  # Native / Emscripten build, fetches raylib 5.5
 ├── README.md
+├── web/shell.html # Browser page and canvas
 ├── Words.txt       # Word list (one word per line)
 ├── highscore.dat   # Saved high score (auto-created when running)
 └── src/
@@ -105,7 +159,7 @@ Press **Enter** or **Space** to play again.
  - **A-Z**: Type letters to lock on and complete words
  - **Backspace**: Remove last typed character or clear error
  - **Enter / Space**: Start game or replay after game over
- - **Esc**: Close window (raylib default)
+ - **Esc**: Close window on desktop (raylib default); close the tab to exit on web
 
 ## Customization
 

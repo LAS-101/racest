@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RACEST — Space Typing Game</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #090b14; color: #dce1f5; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; }
+    main { width: min(1280px, 100%); text-align: center; }
+    h1 { font-size: 1.3rem; letter-spacing: .2em; }
+    canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: black; }
+    canvas:focus-visible { outline: 2px solid #6eaaff; outline-offset: -2px; }
+    p { padding: 0 1rem; color: #969bc8; }
+    #status { min-height: 1.5em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>RACEST</h1>
+    <p id="status" role="status">Loading game…</p>
+    <canvas id="canvas" width="1280" height="720" tabindex="0" aria-label="RACEST typing game. Press Enter to start."></canvas>
+    <p>Click the game, then press Enter or Space to play. Type words before they reach the red line. Backspace corrects mistakes.</p>
+    <p>Use a physical keyboard. The game pauses when you leave the tab. Your best score is saved in this browser.</p>
+  </main>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const status = document.getElementById('status');
+    canvas.addEventListener('click', () => canvas.focus());
+    canvas.addEventListener('contextmenu', event => event.preventDefault());
+    canvas.addEventListener('keydown', event => {
+      if (['Space', 'Backspace', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
+        event.preventDefault();
+      }
+    });
+    canvas.addEventListener('webglcontextlost', event => {
+      event.preventDefault();
+      status.textContent = 'Graphics context lost. Reload the page to play again.';
+    });
+    var Module = {
+      canvas,
+      print: (...args) => console.log(...args),
+      printErr: (...args) => console.error(...args),
+      setStatus: message => { status.textContent = message; },
+      onRuntimeInitialized: () => {
+        status.textContent = 'Ready — press Enter to start';
+        canvas.focus();
+      },
+      onAbort: () => { status.textContent = 'Unable to load the game. Reload the page or try a browser with WebGL enabled.'; }
+    };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>
