@@ -8,10 +8,11 @@ class Renderer;
 
 class Game {
 public:
-	Game();
-	void init();
+	explicit Game(unsigned int seed = std::random_device{}());
+	void init(bool persistScores = true);
 	void start();
-	void update(float dt);
+	void update(float dt, const GameInput& input = {});
+	void markAssisted();
 
 	// accessors for renderer
 	const std::vector<Star>& stars() const;
@@ -21,6 +22,8 @@ public:
 	int highScore() const;
 	bool newRecord() const;
 	GState state() const;
+	bool assisted() const;
+	int completedWords() const;
 
 private:
 	// game data
@@ -33,6 +36,9 @@ private:
 	int     m_highScore;
 	bool    m_newRecord;
 	int     m_targetIdx;
+	bool    m_persistScores = true;
+	bool    m_assisted = false;
+	int     m_completedWords = 0;
 
 	float   m_spawnTimer;
 	std::mt19937 m_rng;
@@ -47,5 +53,7 @@ private:
 	std::string pickWord(float elapsed);
 	void spawnWord();
 	void triggerGameOver();
-	void handleInput();
+	void handleInput(const GameInput& input);
+	void handleCharacter(char key);
+	void completeWord(int index);
 };

@@ -16,7 +16,9 @@ A fast-paced typing game where words race across the screen from right to left. 
 ### Requirements
 
 - **C++17** compiler (g++, clang)
-- **raylib 4.x or 5.x**
+- **CMake 3.16+** and **Make**
+- **raylib 5.5** (CMake uses an installed copy or downloads it)
+- **Python 3** for the agent and Python tests
 - Linux development libraries: `libX11-dev`, `libxrandr-dev`, `libxi-dev`, `libxcursor-dev`
 
 
@@ -58,33 +60,66 @@ cmake --build build/web --parallel
 ```
 
 The first build downloads raylib **5.5** and compiles it for WebAssembly; a native
-raylib installation is not needed for this target. `Words.txt` is bundled in the
+raylib installation is not needed for this target. `assets/words.txt` is bundled in the
 generated data file. Rebuilding after editing it updates the bundled word list.
 
 To publish, upload **all four files** from `build/web/public/` (`index.html`,
 `index.js`, `index.wasm`, and `index.data`) together to a static web host such as
 GitHub Pages or itch.io (HTML game). Serve them over HTTP/HTTPS; opening
 `index.html` directly with `file://` will not work. The host should serve `.wasm`
-as `application/wasm`. No backend or cross-origin isolation headers are required.
+as `application/wasm`. Human play requires no backend or cross-origin isolation headers.
+The Python agent requires its local server; use `python3 src/agent/run.py --web`.
 
 Browser high scores use `localStorage` for the current site and browser profile,
-separately from desktop `highscore.dat`. Clearing site data clears the score;
+separately from desktop `data/highscore.dat`. Clearing site data clears the score;
 when storage is blocked, the score remains available only for the current session.
 
 ### Desktop
 
-From the repository root, compile the sources in the `src/` directory:
+From the repository root:
 
 ```bash
-g++ src/main.cpp src/game.cpp src/renderer.cpp -o racest \
-    -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -std=c++17
+make run
+# Build without opening a window:
+make
+./build/native/racest
 ```
+
+Make delegates compilation to CMake. Native executables and intermediate files
+stay in `build/native/`; the WebAssembly bundle stays in `build/web/public/`.
+For a direct CMake build:
 
 ```bash
-./racest
+cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release
+cmake --build build/native --parallel 2
 ```
 
-The game window opens at 1280×720 pixels. A `Words.txt` file (containing one word per line) should be placed next to the executable (the repository contains `Words.txt` at the project root). If missing, the game uses a built-in fallback word list.
+The game opens at 1280×720 pixels. Run it from the repository root to use
+`assets/words.txt` and `data/highscore.dat`. CMake also copies the word bank to
+`build/native/assets/` for runs from that build directory. If the word bank is
+missing, the game uses its built-in list. The game creates `data/` when saving
+scores. Saved scores are local runtime data and are ignored by Git.
+
+## Python Typing Agent
+
+The autonomous agent lives in **`src/agent/`**. Its decisions, pacing, launcher,
+browser server, and tests are written in Python using the standard library.
+The C++ game provides state observations and accepts normal typing commands.
+
+```bash
+make agent                              # Watch the Python agent play
+python3 src/agent/run.py --wpm 180        # Choose a typing speed
+make simulate                           # Evaluate without opening a window
+python3 src/agent/run.py --web            # Serve the built browser game + agent
+make test                               # Game and Python agent tests
+```
+
+Press **F2** to take control or resume the connected agent. Agent-assisted
+rounds do not update personal high scores. Browser automation requires the
+Python server; human play still works on a static host.
+
+See [the agent README](src/agent/README.md) for setup, evaluation options, and
+the connection protocol.
 
 ## How to Play
 
@@ -116,43 +151,55 @@ Press **Enter** or **Space** to play again.
   - Gold: high score display
 - **Real-time HUD**: Score, time, and best score
 - **Adaptive difficulty**: Word selection based on elapsed time
-- **Persistent high scores**: Saved to `highscore.dat` on desktop or browser local storage on web
+- **Persistent high scores**: Saved to `data/highscore.dat` on desktop or browser local storage on web
 
 ## Project Structure
 
-```
+```text
 .
-├── Makefile
-├── CMakeLists.txt  # Native / Emscripten build, fetches raylib 5.5
+├── CMakeLists.txt          # Native and WebAssembly build definitions
+├── Makefile                # Build, run, test, and serve shortcuts
 ├── README.md
-├── web/shell.html # Browser page and canvas
-├── Words.txt       # Word list (one word per line)
-├── highscore.dat   # Saved high score (auto-created when running)
-└── src/
-    ├── main.cpp        # Entry point, window setup
-    ├── game.h          # Game state and declarations
-    ├── game.cpp        # Game logic, input handling, physics
-    ├── types.h         # Color palette, constants, structs (Star, Word, GState)
-    ├── renderer.h      # Rendering declarations
-    └── renderer.cpp    # Drawing logic (HUD, words, menu, game over)
+├── assets/
+│   └── words.txt           # Shared game word bank
+├── data/
+│   └── highscore.dat       # Local saved score (ignored by Git)
+├── src/
+│   ├── game/               # C++ game and agent transport
+│   │   ├── main.cpp
+│   │   ├── game.h / game.cpp
+│   │   ├── renderer.h / renderer.cpp
+│   │   ├── types.h
+│   │   └── game_bridge.h / game_bridge.cpp
+│   └── agent/              # Python decisions and launch tools
+│       ├── policy.py
+│       ├── run.py
+│       ├── server.py
+│       └── README.md
+├── tests/
+│   ├── game/               # C++ input and score tests
+│   └── agent/              # Python policy, integration, and browser tests
+├── web/
+│   └── shell.html          # Browser page and controls
+└── build/                  # Generated output (ignored by Git)
 ```
 
 ## Technical Details
 
 ### Architecture
 
-- **Modular design**: Separated game logic (`src/game.cpp`), rendering (`src/renderer.cpp`), and types (`src/types.h`)
-- **Global game state**: Managed through extern variables (g_words, g_state, g_score, etc.)
+- **Modular design**: Separated game logic (`src/game/game.cpp`), rendering (`src/game/renderer.cpp`), and types (`src/game/types.h`)
+- **Game state**: Owned by the `Game` class; `Renderer` draws it and the Python agent observes it through `game_bridge`.
 - **Spawn rate scaling**: Gradually reduces spawn interval from 3.3s to 1.1s
 - **Speed curve**: Word speed ramps from ~88 px/s to ~270 px/s
 - **Word selection**: Pool filtered by length, preferring longer words as time progresses
 
 ### Key Functions
 
-- `initGame()`: Load word bank and high score
-- `updateGame(dt)`: Main update loop (input, physics, spawning)
-- `startGame()`: Reset state and begin playing
-- `drawFrame(now)`: Render all visual elements
+- `Game::init()`: Load word bank and high score
+- `Game::update(dt, input)`: Main update loop (input, physics, spawning)
+- `Game::start()`: Reset state and begin playing
+- `Renderer::drawFrame(game, now, agent)`: Render all visual elements
 
 ## Controls
 
@@ -160,16 +207,17 @@ Press **Enter** or **Space** to play again.
  - **Backspace**: Remove last typed character or clear error
  - **Enter / Space**: Start game or replay after game over
  - **Esc**: Close window on desktop (raylib default); close the tab to exit on web
+ - **F2**: Enable the agent / take control
 
 ## Customization
 
 ### Colors
 
-Edit the color constants in `src/types.h`.
+Edit the color constants in `src/game/types.h`.
 
 ### Difficulty
 
-Adjust these in `src/game.cpp`:
+Adjust these in `src/game/game.cpp`:
 
 - `wordSpeed()`: Change the speed ramp curve
 - `spawnInterval()`: Adjust how often new words appear
@@ -178,7 +226,7 @@ Adjust these in `src/game.cpp`:
 
 ### Screen Size
 
-Modify in `src/types.h`:
+Modify in `src/game/types.h`:
 
 ```cpp
 inline constexpr int SW = 1280;  // screen width
@@ -198,7 +246,7 @@ inline constexpr int SH = 720;   // screen height
 
 ## Building with Your Own Word List
 
-Replace or supplement `Words.txt` (one word per line, alphanumeric only). The game automatically filters and normalizes words (3+ characters, lowercase).
+Replace or supplement `assets/words.txt` (one word per line, alphanumeric only). The game automatically filters and normalizes words (3+ characters, lowercase).
 
 ## License
 

@@ -1,11 +1,11 @@
 #include "game.h"
 #include "raylib.h"
 #include <fstream>
+#include <filesystem>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cctype>
-#include <chrono>
 using namespace std;
 
 #if defined(__EMSCRIPTEN__)
@@ -28,13 +28,13 @@ EM_JS(void, saveBrowserHighScore, (int value), {
     }
 });
 #else
-static const char* SAVE_PATH  = "highscore.dat";
+static const char* SAVE_PATH  = "data/highscore.dat";
 #endif
-static const char* WORDS_PATH = "Words.txt";
+static const char* WORDS_PATH = "assets/words.txt";
 
-Game::Game()
+Game::Game(unsigned int seed)
     : m_state(GState::MENU), m_time(0.0f), m_score(0), m_highScore(0), m_newRecord(false),
-      m_targetIdx(-1), m_spawnTimer(0.0f), m_rng((random_device())()) {}
+      m_targetIdx(-1), m_spawnTimer(0.0f), m_rng(seed) {}
 
 int Game::loadHighScore() {
 #if defined(__EMSCRIPTEN__)
@@ -51,6 +51,8 @@ void Game::saveHighScore(int v) {
 #if defined(__EMSCRIPTEN__)
     saveBrowserHighScore(v);
 #else
+    std::error_code error;
+    std::filesystem::create_directories("data", error);
     ofstream f(SAVE_PATH);
     if (f.is_open()) f << v;
 #endif
@@ -158,7 +160,7 @@ void Game::spawnWord() {
 }
 
 void Game::triggerGameOver() {
-    if (m_score > m_highScore) {
+    if (m_persistScores && !m_assisted && m_score > m_highScore) {
         m_highScore = m_score;
         m_newRecord = true;
         saveHighScore(m_highScore);
@@ -173,21 +175,24 @@ void Game::start() {
     m_newRecord  = false;
     m_spawnTimer = 0.0f;
     m_targetIdx  = -1;
+    m_assisted   = false;
+    m_completedWords = 0;
     m_state      = GState::PLAYING;
     spawnWord();
 }
 
-void Game::init() {
+void Game::init(bool persistScores) {
+    m_persistScores = persistScores;
     m_wordBank  = loadWordBank();
-    m_highScore = loadHighScore();
+    m_highScore = persistScores ? loadHighScore() : 0;
     initStars();
 }
 
-void Game::handleInput() {
+void Game::handleInput(const GameInput& input) {
     if (m_targetIdx >= 0 && m_targetIdx < (int)m_words.size()) {
         Word& tw = m_words[m_targetIdx];
 
-        if (IsKeyPressed(KEY_BACKSPACE)) {
+        if (input.backspace) {
             if (tw.errored) {
                 tw.errored = false;
             } else if (tw.typed > 0) {
@@ -198,56 +203,49 @@ void Game::handleInput() {
                 }
             }
         }
-
-        int ch;
-        while ((ch = GetCharPressed()) != 0) {
-            if (tw.errored) break;
-            if (tw.typed >= (int)tw.text.size()) break;
-
-            char key = (char)tolower(ch);
-            if (key == tw.text[tw.typed]) {
-                tw.typed++;
-                if (tw.typed == (int)tw.text.size()) {
-                    m_score += 10 + (int)(tw.speed / 14.0f);
-                    m_words.erase(m_words.begin() + m_targetIdx);
-                    m_targetIdx = -1;
-                    break;
-                }
-            } else {
-                tw.errored = true;
-                break;
-            }
-        }
-
-    } else {
-        int ch;
-        if ((ch = GetCharPressed()) != 0) {
-            char key = (char)tolower(ch);
-
-            int   best  = -1;
-            float bestX = (float)SW + 1.0f;
-            for (int i = 0; i < (int)m_words.size(); ++i) {
-                const auto& w = m_words[i];
-                if (!w.text.empty() && w.text[0] == key && w.x < bestX) {
-                    bestX = w.x;
-                    best  = i;
-                }
-            }
-            if (best >= 0) {
-                m_targetIdx              = best;
-                m_words[best].targeted   = true;
-                m_words[best].typed      = 1;
-                if (m_words[best].typed == (int)m_words[best].text.size()) {
-                    m_score += 10 + (int)(m_words[best].speed / 14.0f);
-                    m_words.erase(m_words.begin() + best);
-                    m_targetIdx = -1;
-                }
-            }
-        }
+    }
+    for (unsigned char ch : input.text) {
+        if (ch < 128) handleCharacter((char)tolower(ch));
     }
 }
 
-void Game::update(float dt) {
+void Game::completeWord(int index) {
+    m_score += 10 + (int)(m_words[index].speed / 14.0f);
+    ++m_completedWords;
+    m_words.erase(m_words.begin() + index);
+    m_targetIdx = -1;
+}
+
+void Game::handleCharacter(char key) {
+    if (m_targetIdx >= 0 && m_targetIdx < (int)m_words.size()) {
+        Word& word = m_words[m_targetIdx];
+        if (word.errored) return;
+        if (key != word.text[word.typed]) {
+            word.errored = true;
+            return;
+        }
+        if (++word.typed == (int)word.text.size()) completeWord(m_targetIdx);
+        return;
+    }
+
+    int best = -1;
+    float bestX = (float)SW + 1.0f;
+    for (int i = 0; i < (int)m_words.size(); ++i) {
+        const auto& word = m_words[i];
+        if (!word.text.empty() && word.text[0] == key && word.x < bestX) {
+            bestX = word.x;
+            best = i;
+        }
+    }
+    if (best >= 0) {
+        m_targetIdx = best;
+        m_words[best].targeted = true;
+        m_words[best].typed = 1;
+        if (m_words[best].text.size() == 1) completeWord(best);
+    }
+}
+
+void Game::update(float dt, const GameInput& input) {
     if (m_state == GState::PLAYING) {
         m_time += dt;
 
@@ -267,10 +265,10 @@ void Game::update(float dt) {
             spawnWord();
         }
 
-        handleInput();
+        handleInput(input);
 
     } else {
-        if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE))
+        if (input.start)
             start();
     }
 }
@@ -283,3 +281,6 @@ int Game::score() const { return m_score; }
 int Game::highScore() const { return m_highScore; }
 bool Game::newRecord() const { return m_newRecord; }
 GState Game::state() const { return m_state; }
+bool Game::assisted() const { return m_assisted; }
+int Game::completedWords() const { return m_completedWords; }
+void Game::markAssisted() { m_assisted = true; }

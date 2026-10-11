@@ -13,6 +13,10 @@
     canvas:focus-visible { outline: 2px solid #6eaaff; outline-offset: -2px; }
     p { padding: 0 1rem; color: #969bc8; }
     #status { min-height: 1.5em; }
+    .agent-controls { display: flex; justify-content: center; align-items: center; gap: .75rem; flex-wrap: wrap; margin: 1rem; }
+    button, select { font: inherit; padding: .5rem .75rem; border: 1px solid #969bc8; border-radius: .4rem; background: #14182b; color: #dce1f5; }
+    button { cursor: pointer; }
+    button:disabled, select:disabled { opacity: .5; cursor: wait; }
   </style>
 </head>
 <body>
@@ -20,12 +24,50 @@
     <h1>RACEST</h1>
     <p id="status" role="status">Loading game…</p>
     <canvas id="canvas" width="1280" height="720" tabindex="0" aria-label="RACEST typing game. Press Enter to start."></canvas>
+    <div class="agent-controls" aria-label="Typing agent controls">
+      <button id="start-agent" type="button" disabled>Start agent</button>
+      <button id="stop-agent" type="button" disabled>Take control</button>
+      <label for="agent-speed">Agent speed</label>
+      <select id="agent-speed" disabled>
+        <option value="40">40 WPM</option>
+        <option value="80">80 WPM</option>
+        <option value="120" selected>120 WPM</option>
+        <option value="180">180 WPM</option>
+        <option value="300">300 WPM</option>
+        <option value="600">600 WPM</option>
+      </select>
+    </div>
     <p>Click the game, then press Enter or Space to play. Type words before they reach the red line. Backspace corrects mistakes.</p>
     <p>Use a physical keyboard. The game pauses when you leave the tab. Your best score is saved in this browser.</p>
+    <p>The agent runs in Python. Serve this game with <code>python3 src/agent/run.py --web</code>, then use Start agent or F2. Agent-assisted rounds do not update your personal best.</p>
   </main>
   <script>
     const canvas = document.getElementById('canvas');
     const status = document.getElementById('status');
+    const startAgent = document.getElementById('start-agent');
+    const stopAgent = document.getElementById('stop-agent');
+    const agentSpeed = document.getElementById('agent-speed');
+    const agentSession = Math.random().toString(36).slice(2);
+    let agentActive = false;
+    let agentEpoch = 0;
+    let agentRound = -1;
+    let agentWpm = 120;
+    let requestActive = false;
+    let accumulatedDt = 0;
+    let agentError = '';
+    startAgent.addEventListener('click', () => {
+      agentError = '';
+      Module._racest_set_agent(1);
+      canvas.focus();
+    });
+    stopAgent.addEventListener('click', () => {
+      Module._racest_set_agent(0);
+      canvas.focus();
+    });
+    agentSpeed.addEventListener('change', () => {
+      Module._racest_set_agent_wpm(Number(agentSpeed.value));
+      canvas.focus();
+    });
     canvas.addEventListener('click', () => canvas.focus());
     canvas.addEventListener('contextmenu', event => event.preventDefault());
     canvas.addEventListener('keydown', event => {
@@ -42,9 +84,61 @@
       print: (...args) => console.log(...args),
       printErr: (...args) => console.error(...args),
       setStatus: message => { status.textContent = message; },
+      onGameStatus: ({state, enabled, wpm, score, completed, focused, round}) => {
+        if (Boolean(enabled) !== agentActive || round !== agentRound || wpm !== agentWpm) {
+          ++agentEpoch;
+          accumulatedDt = 0;
+        }
+        agentActive = Boolean(enabled);
+        agentRound = round;
+        agentWpm = wpm;
+        let message;
+        if (agentError) message = agentError;
+        else if (!focused) message = 'Paused — click the game to resume';
+        else if (state === 0) message = 'Ready — press Enter or start the agent';
+        else if (state === 2) message = `Game over — score ${score}. Press Enter to play again.`;
+        else if (enabled) message = `Python agent playing at ${wpm} WPM — score ${score} — ${completed} ${completed === 1 ? 'word' : 'words'} completed`;
+        else message = `Playing — score ${score}`;
+        if (status.textContent !== message) status.textContent = message;
+      },
+      onGameObservation: observation => {
+        if (!agentActive || observation.state !== 'playing') return;
+        accumulatedDt += observation.dt;
+        if (requestActive) return;
+        requestActive = true;
+        const epoch = agentEpoch;
+        const snapshot = {...observation, dt: accumulatedDt};
+        accumulatedDt = 0;
+        fetch('/api/agent/step', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({session: agentSession, epoch, wpm: agentWpm, observation: snapshot}),
+          signal: AbortSignal.timeout(2000)
+        }).then(response => {
+          if (!response.ok) throw new Error('Python agent unavailable');
+          return response.json();
+        }).then(action => {
+          if (epoch !== agentEpoch || !agentActive) return;
+          Module._racest_submit_agent_input(action.text ? action.text.charCodeAt(0) : 0, Number(action.backspace));
+        }).catch(() => {
+          if (epoch !== agentEpoch || !agentActive) return;
+          agentError = 'Python agent unavailable — run python3 src/agent/run.py --web and reload this page.';
+          Module._racest_set_agent(0);
+        }).finally(() => { requestActive = false; });
+      },
       onRuntimeInitialized: () => {
         status.textContent = 'Ready — press Enter to start';
+        startAgent.disabled = stopAgent.disabled = agentSpeed.disabled = false;
         canvas.focus();
+        fetch('/api/agent/config').then(response => response.ok ? response.json() : null).then(config => {
+          if (!config) return;
+          const value = String(config.wpm);
+          if (![...agentSpeed.options].some(option => option.value === value)) {
+            agentSpeed.add(new Option(`${value} WPM`, value));
+          }
+          agentSpeed.value = value;
+          Module._racest_set_agent_wpm(Number(value));
+        }).catch(() => {});
       },
       onAbort: () => { status.textContent = 'Unable to load the game. Reload the page or try a browser with WebGL enabled.'; }
     };

@@ -1,31 +1,37 @@
-CXX := g++
-CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -Isrc
-LDFLAGS := -lraylib -pthread -lm -ldl
+# CMake owns compilation and dependency tracking. Make provides task shortcuts.
+CMAKE ?= cmake
+PYTHON ?= python3
+JOBS ?= 2
+NATIVE_BUILD := build/native
+WEB_BUILD := build/web
 
-SRCS := src/main.cpp src/game.cpp src/renderer.cpp
-OBJS := $(SRCS:.cpp=.o)
-TARGET := racest
+.PHONY: all build run agent simulate test web serve-web clean
 
-.PHONY: all build run clean web serve-web
+all: build
 
-all: $(TARGET)
+build:
+	$(CMAKE) -S . -B $(NATIVE_BUILD) -DCMAKE_BUILD_TYPE=Release
+	$(CMAKE) --build $(NATIVE_BUILD) --parallel $(JOBS)
 
-$(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+run: build
+	./$(NATIVE_BUILD)/racest
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+agent: build
+	$(PYTHON) src/agent/run.py
 
-run: all
-	./$(TARGET)
+simulate: build
+	$(PYTHON) src/agent/run.py --simulate --seed 42
 
-# Activate emsdk_env.sh first. CMake builds a separate WebAssembly raylib.
+test: build
+	ctest --test-dir $(NATIVE_BUILD) --output-on-failure
+
+# Activate emsdk_env.sh before building the WebAssembly version.
 web:
-	emcmake cmake -S . -B build/web -DCMAKE_BUILD_TYPE=Release
-	cmake --build build/web --parallel
+	emcmake $(CMAKE) -S . -B $(WEB_BUILD) -DCMAKE_BUILD_TYPE=Release
+	$(CMAKE) --build $(WEB_BUILD) --parallel $(JOBS)
 
 serve-web: web
-	python3 -m http.server 8000 --bind 127.0.0.1 --directory build/web/public
+	$(PYTHON) src/agent/run.py --web
 
 clean:
-	rm -f $(OBJS) main.o game.o renderer.o $(TARGET)
+	rm -rf $(NATIVE_BUILD) $(WEB_BUILD)

@@ -13,7 +13,7 @@ static int partWidth(const string& s, int n, int size) {
     return MeasureText(s.substr(0, n).c_str(), size);
 }
 
-void Renderer::drawFrame(const Game& G, float now) const {
+void Renderer::drawFrame(const Game& G, float now, const AgentStatus& agent) const {
     // draw stars
     for (const auto& s : G.stars()) {
         float t   = 0.5f + 0.5f * sinf(now * s.twinkSpeed + s.phase);
@@ -136,4 +136,14 @@ void Renderer::drawFrame(const Game& G, float now) const {
         int rw = MeasureText(restart, 20);
         DrawText(restart, SW/2 - rw/2, SH/2 + 72, 20, rc);
     }
+    char agentStatus[128];
+    if (agent.enabled) {
+        snprintf(agentStatus, sizeof(agentStatus), "PYTHON AGENT  %.0f WPM  |  %d words  |  F2: take control",
+                 agent.wpm, G.completedWords());
+    } else {
+        snprintf(agentStatus, sizeof(agentStatus), "%s%s",
+                 agent.available ? "F2: enable Python agent" : "Python agent: python3 src/agent/run.py",
+                 G.assisted() ? "  |  assisted round" : "");
+    }
+    DrawText(agentStatus, 18, SH - 28, 17, agent.enabled ? COL_TYPED : COL_UNTYPED);
 }

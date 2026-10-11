@@ -34,3 +34,17 @@ struct Word {
 };
 
 enum class GState { MENU, PLAYING, GAMEOVER };
+
+// Both the keyboard and the agent submit input through this interface.
+struct GameInput {
+    std::string text;
+    bool backspace = false;
+    bool start = false;
+};
+
+// Presentation settings for an external agent; contains no decision logic.
+struct AgentStatus {
+    bool enabled = false;
+    bool available = false;
+    float wpm = 120.0f;
+};
