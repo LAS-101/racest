@@ -46,6 +46,12 @@ def run_native(options):
     if not binary.is_file():
         raise RuntimeError(f"Game executable missing: {binary}. Build it with make first.")
     command = [str(binary), "--agent-stdio", "--agent-wpm", str(options.wpm)]
+    if options.online_words or options.refresh_words:
+        sys.path.insert(0, str(ROOT / "src/words"))
+        from dataset import describe, resolve_words
+        source = resolve_words(ROOT, options.refresh_words)
+        print(describe(source), file=sys.stderr)
+        command.extend(["--words-file", str(source.path)])
     if options.seed is not None:
         command.extend(["--seed", str(options.seed)])
     if options.simulate:
@@ -94,13 +100,21 @@ def main(argv=None):
     parser.add_argument("--seed", type=parse_seed, help="Reproducible game seed")
     parser.add_argument("--binary", type=Path, default=ROOT / "build/native/racest", help="Native game executable")
     parser.add_argument("--port", type=int, default=8000, help="Local browser server port")
+    parser.add_argument("--online-words", action="store_true", help="Fetch/cache an internet word dataset")
+    parser.add_argument("--refresh-words", action="store_true", help="Refresh online words now (implies --online-words)")
     options = parser.parse_args(argv)
     if not 1 <= options.port <= 65535:
         parser.error("Port must be between 1 and 65535")
     try:
         if options.web:
             from server import serve
-            serve(ROOT / "build/web/public", options.port, options.wpm)
+            word_source = None
+            if options.online_words or options.refresh_words:
+                sys.path.insert(0, str(ROOT / "src/words"))
+                from dataset import describe, resolve_words
+                word_source = resolve_words(ROOT, options.refresh_words)
+                print(describe(word_source), file=sys.stderr)
+            serve(ROOT / "build/web/public", options.port, options.wpm, word_source)
             return 0
         return run_native(options)
     except KeyboardInterrupt:

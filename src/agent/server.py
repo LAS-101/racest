@@ -10,11 +10,12 @@ from policy import TypingAgent
 
 
 class AgentServer(ThreadingHTTPServer):
-    def __init__(self, address, public, default_wpm=120):
+    def __init__(self, address, public, default_wpm=120, word_source=None):
         super().__init__(address, partial(AgentHandler, directory=str(public)))
         self.default_wpm = default_wpm
         self.sessions = {}
         self.agent_lock = Lock()
+        self.word_source = word_source
 
 
 class AgentHandler(SimpleHTTPRequestHandler):
@@ -33,6 +34,10 @@ class AgentHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/agent/config":
             self.send_json({"wpm": self.server.default_wpm})
+        elif self.path == "/api/words":
+            source = self.server.word_source
+            self.send_json({"source": source.source if source else "bundled",
+                            "words": list(source.words) if source and source.source != "bundled" else []})
         else:
             super().do_GET()
 
@@ -69,9 +74,9 @@ class AgentHandler(SimpleHTTPRequestHandler):
             self.send_error(400, str(error))
 
 
-def serve(public: Path, port=8000, wpm=120):
+def serve(public: Path, port=8000, wpm=120, word_source=None):
     if not all((public / name).is_file() for name in ("index.html", "index.js", "index.wasm", "index.data")):
         raise RuntimeError("Browser build is missing. Run make web first.")
-    with AgentServer(("127.0.0.1", port), public, wpm) as server:
+    with AgentServer(("127.0.0.1", port), public, wpm, word_source) as server:
         print(f"RACEST + Python agent: http://localhost:{server.server_port}", flush=True)
         server.serve_forever()

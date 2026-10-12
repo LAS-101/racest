@@ -44,6 +44,8 @@ if(EMSCRIPTEN)
         "-sUSE_GLFW=3"
         "-sALLOW_MEMORY_GROWTH=1"
         "-sENVIRONMENT=web"
+        "-sEXPORTED_FUNCTIONS=_main,_malloc,_free"
+        "-sEXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8"
         "SHELL:--shell-file \"${CMAKE_SOURCE_DIR}/web/shell.html\""
         "SHELL:--preload-file \"${CMAKE_SOURCE_DIR}/assets/words.txt@/assets/words.txt\""
     )
@@ -65,6 +67,8 @@ else()
                 -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/agent" -v)
             set_tests_properties(python_agent_tests PROPERTIES
                 ENVIRONMENT "RACEST_TEST_BINARY=$<TARGET_FILE:racest>")
+            add_test(NAME word_dataset_tests COMMAND "${Python3_EXECUTABLE}"
+                -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/words" -v)
         endif()
     endif()
 endif()

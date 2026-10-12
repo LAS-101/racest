@@ -5,7 +5,7 @@ JOBS ?= 2
 NATIVE_BUILD := build/native
 WEB_BUILD := build/web
 
-.PHONY: all build run agent simulate test web serve-web clean
+.PHONY: all build run run-local refresh-words agent agent-online simulate test web serve-web clean
 
 all: build
 
@@ -14,10 +14,19 @@ build:
 	$(CMAKE) --build $(NATIVE_BUILD) --parallel $(JOBS)
 
 run: build
+	$(PYTHON) src/words/run.py
+
+run-local: build
 	./$(NATIVE_BUILD)/racest
+
+refresh-words:
+	$(PYTHON) src/words/run.py --download-only --refresh-words
 
 agent: build
 	$(PYTHON) src/agent/run.py
+
+agent-online: build
+	$(PYTHON) src/agent/run.py --online-words
 
 simulate: build
 	$(PYTHON) src/agent/run.py --simulate --seed 42
@@ -31,7 +40,7 @@ web:
 	$(CMAKE) --build $(WEB_BUILD) --parallel $(JOBS)
 
 serve-web: web
-	$(PYTHON) src/agent/run.py --web
+	$(PYTHON) src/agent/run.py --web --online-words
 
 clean:
 	rm -rf $(NATIVE_BUILD) $(WEB_BUILD)

@@ -82,10 +82,45 @@ static void scoreTests() {
     std::filesystem::remove_all(dir);
 }
 
+static void wordBankTests() {
+    Game game(42);
+    game.init(false, "missing-online-dataset.txt");
+    require(!game.setWordBank("123 punctuation! a abcdefghijklmnop"),
+            "Invalid dataset replaced the word bank");
+    require(game.setWordBank("PLANET\n"), "Dataset could not be loaded");
+    game.start();
+    require(game.words().front().text == "planet", "Game did not spawn from supplied dataset");
+    require(!game.setWordBank("space\n"), "Word bank changed during a live round");
+
+    const auto original = std::filesystem::current_path();
+    const auto dir = std::filesystem::temp_directory_path() /
+                     ("racest-word-tests-" + std::to_string(std::random_device{}()));
+    std::filesystem::create_directory(dir);
+    std::filesystem::current_path(dir);
+    try {
+        std::ofstream("online.txt") << "planet\n";
+        Game online(42);
+        online.init(false, "online.txt");
+        online.start();
+        require(online.words().front().text == "planet", "Custom word file was ignored");
+        Game fallback(42);
+        fallback.init(false, "missing.txt");
+        fallback.start();
+        require(!fallback.words().front().text.empty(), "Missing word dataset prevented play");
+    } catch (...) {
+        std::filesystem::current_path(original);
+        std::filesystem::remove_all(dir);
+        throw;
+    }
+    std::filesystem::current_path(original);
+    std::filesystem::remove_all(dir);
+}
+
 int main() {
     try {
         inputTests();
         scoreTests();
+        wordBankTests();
         std::cout << "Game tests passed: keyboard input, error recovery, and score isolation.\n";
         return 0;
     } catch (const std::exception& error) {

@@ -41,13 +41,27 @@ It runs faster than real time and never reads or writes your high score.
 Seeds are reproducible on the same build and word bank. Maximum duration is
 86400 seconds. Use `--binary /path/to/racest` to use a CMake-built executable.
 
+## Online vocabulary
+
+By default, agent runs and simulations use the bundled word bank for repeatable
+results. Add `--online-words` to download/cache the internet dataset:
+
+```bash
+make agent-online
+python3 src/agent/run.py --simulate --online-words --seconds 600 --seed 42
+python3 src/agent/run.py --online-words --refresh-words
+```
+
+The same words are supplied to the real game and observed by the Python agent.
+Downloads happen before play and fall back to cached or bundled words offline.
+
 ## Browser
 
 Build the WebAssembly game with Emscripten, then start the Python server:
 
 ```bash
 make web
-python3 src/agent/run.py --web
+python3 src/agent/run.py --web --online-words
 # Or build and serve in one command:
 make serve-web
 ```
@@ -57,7 +71,7 @@ Open **http://localhost:8000** and click **Start agent**. Use the speed selector
 You can choose another port or initial speed:
 
 ```bash
-python3 src/agent/run.py --web --port 8001 --wpm 180
+python3 src/agent/run.py --web --online-words --port 8001 --wpm 180
 ```
 
 The server binds to localhost and serves the game and Python API from the same

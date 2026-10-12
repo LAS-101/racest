@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cctype>
+#include <sstream>
 using namespace std;
 
 #if defined(__EMSCRIPTEN__)
@@ -58,9 +59,9 @@ void Game::saveHighScore(int v) {
 #endif
 }
 
-vector<string> Game::loadWordBank() {
+vector<string> Game::loadWordBank(const string& wordsPath) {
     vector<string> bank;
-    ifstream f(WORDS_PATH);
+    ifstream f(wordsPath);
     string w;
     while (f >> w) {
         string clean;
@@ -70,6 +71,7 @@ vector<string> Game::loadWordBank() {
         if (clean.size() >= 3)
             bank.push_back(clean);
     }
+    if (bank.empty() && wordsPath != WORDS_PATH) return loadWordBank(WORDS_PATH);
     if (bank.empty()) {
         bank = {
             "the","and","for","are","not","you","all","can","day","see",
@@ -94,6 +96,25 @@ vector<string> Game::loadWordBank() {
         };
     }
     return bank;
+}
+
+bool Game::setWordBank(const string& text) {
+    if (m_state == GState::PLAYING || text.size() > 2 * 1024 * 1024) return false;
+    vector<string> bank;
+    istringstream input(text);
+    string word;
+    while (input >> word) {
+        if (word.size() < 3 || word.size() > 12) continue;
+        bool valid = true;
+        for (char& c : word) {
+            if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+            if (c < 'a' || c > 'z') valid = false;
+        }
+        if (valid) bank.push_back(word);
+    }
+    if (bank.empty()) return false;
+    m_wordBank = std::move(bank);
+    return true;
 }
 
 void Game::initStars() {
@@ -181,9 +202,9 @@ void Game::start() {
     spawnWord();
 }
 
-void Game::init(bool persistScores) {
+void Game::init(bool persistScores, const string& wordsPath) {
     m_persistScores = persistScores;
-    m_wordBank  = loadWordBank();
+    m_wordBank  = loadWordBank(wordsPath);
     m_highScore = persistScores ? loadHighScore() : 0;
     initStars();
 }

@@ -9,7 +9,8 @@ class Renderer;
 class Game {
 public:
 	explicit Game(unsigned int seed = std::random_device{}());
-	void init(bool persistScores = true);
+	void init(bool persistScores = true, const std::string& wordsPath = "assets/words.txt");
+	bool setWordBank(const std::string& text);
 	void start();
 	void update(float dt, const GameInput& input = {});
 	void markAssisted();
@@ -46,7 +47,7 @@ private:
 	// helpers
 	int loadHighScore();
 	void saveHighScore(int v);
-	std::vector<std::string> loadWordBank();
+	std::vector<std::string> loadWordBank(const std::string& wordsPath);
 	void initStars();
 	float wordSpeed(float elapsed);
 	float spawnInterval(float elapsed);

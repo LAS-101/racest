@@ -79,7 +79,8 @@ when storage is blocked, the score remains available only for the current sessio
 From the repository root:
 
 ```bash
-make run
+make run        # Fetch/cache online words and play
+make run-local  # Play with the original bundled vocabulary
 # Build without opening a window:
 make
 ./build/native/racest
@@ -94,11 +95,37 @@ cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release
 cmake --build build/native --parallel 2
 ```
 
-The game opens at 1280×720 pixels. Run it from the repository root to use
+`make run` loads a vocabulary from an internet dataset before starting the
+game. Downloads are cached in `data/`; gameplay picks words randomly from that
+vocabulary without network requests during a round. Cached or bundled words
+keep the game playable offline. Use `make run-local` for the original vocabulary.
+
+The game opens at 1280×720 pixels. Run the executable from the repository root to use
 `assets/words.txt` and `data/highscore.dat`. CMake also copies the word bank to
 `build/native/assets/` for runs from that build directory. If the word bank is
 missing, the game uses its built-in list. The game creates `data/` when saving
 scores. Saved scores are local runtime data and are ignored by Git.
+
+## Internet Word Dataset
+
+The online source is the [Google 10,000 English words dataset](https://github.com/first20hours/google-10000-english),
+using its `google-10000-english-no-swears.txt` list. RACEST keeps unique lowercase
+ASCII words with 3–12 letters so they fit the controls and difficulty curve.
+The downloaded list is stored separately from your original `assets/words.txt`.
+
+```bash
+make run           # Human play with online words
+make agent-online  # Python agent with online words
+make refresh-words # Force a new download without opening a window
+make serve-web     # Browser game + Python agent + online vocabulary
+```
+
+A valid cache is reused for 24 hours. If a refresh fails, RACEST uses the previous
+cache or the bundled list. Downloads have an eight-second timeout and happen
+before play. `data/words.online.json` records the source URL, timestamp, and word
+count; all downloaded data is ignored by Git. Simulations use the original
+vocabulary unless you explicitly pass `--online-words`. See
+[the word-source README](src/words/README.md) for commands and behavior.
 
 ## Python Typing Agent
 
@@ -163,7 +190,9 @@ Press **Enter** or **Space** to play again.
 ├── assets/
 │   └── words.txt           # Shared game word bank
 ├── data/
-│   └── highscore.dat       # Local saved score (ignored by Git)
+│   ├── highscore.dat       # Local saved score (ignored by Git)
+│   ├── words.online.txt    # Downloaded vocabulary (ignored by Git)
+│   └── words.online.json   # Dataset provenance (ignored by Git)
 ├── src/
 │   ├── game/               # C++ game and agent transport
 │   │   ├── main.cpp
@@ -171,14 +200,16 @@ Press **Enter** or **Space** to play again.
 │   │   ├── renderer.h / renderer.cpp
 │   │   ├── types.h
 │   │   └── game_bridge.h / game_bridge.cpp
-│   └── agent/              # Python decisions and launch tools
-│       ├── policy.py
-│       ├── run.py
-│       ├── server.py
-│       └── README.md
+│   ├── agent/              # Python decisions and launch tools
+│   │   ├── policy.py
+│   │   ├── run.py
+│   │   ├── server.py
+│   │   └── README.md
+│   └── words/              # Internet dataset download, cache, and game launcher
 ├── tests/
 │   ├── game/               # C++ input and score tests
-│   └── agent/              # Python policy, integration, and browser tests
+│   ├── agent/              # Python policy, integration, and browser tests
+│   └── words/              # Dataset validation and offline fallback tests
 ├── web/
 │   └── shell.html          # Browser page and controls
 └── build/                  # Generated output (ignored by Git)

@@ -23,6 +23,7 @@
   <main>
     <h1>RACEST</h1>
     <p id="status" role="status">Loading game…</p>
+    <p id="word-source" role="status">Bundled words</p>
     <canvas id="canvas" width="1280" height="720" tabindex="0" aria-label="RACEST typing game. Press Enter to start."></canvas>
     <div class="agent-controls" aria-label="Typing agent controls">
       <button id="start-agent" type="button" disabled>Start agent</button>
@@ -44,6 +45,8 @@
   <script>
     const canvas = document.getElementById('canvas');
     const status = document.getElementById('status');
+    const wordSource = document.getElementById('word-source');
+    let wordsReady = false;
     const startAgent = document.getElementById('start-agent');
     const stopAgent = document.getElementById('stop-agent');
     const agentSpeed = document.getElementById('agent-speed');
@@ -71,6 +74,11 @@
     canvas.addEventListener('click', () => canvas.focus());
     canvas.addEventListener('contextmenu', event => event.preventDefault());
     canvas.addEventListener('keydown', event => {
+      if (!wordsReady) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (['Space', 'Backspace', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
         event.preventDefault();
       }
@@ -93,7 +101,8 @@
         agentRound = round;
         agentWpm = wpm;
         let message;
-        if (agentError) message = agentError;
+        if (!wordsReady) message = 'Loading word dataset…';
+        else if (agentError) message = agentError;
         else if (!focused) message = 'Paused — click the game to resume';
         else if (state === 0) message = 'Ready — press Enter or start the agent';
         else if (state === 2) message = `Game over — score ${score}. Press Enter to play again.`;
@@ -128,8 +137,25 @@
       },
       onRuntimeInitialized: () => {
         status.textContent = 'Ready — press Enter to start';
-        startAgent.disabled = stopAgent.disabled = agentSpeed.disabled = false;
         canvas.focus();
+        fetch('/api/words', {signal: AbortSignal.timeout(3000)}).then(response => {
+          if (!response.ok) throw new Error('Using bundled words');
+          return response.json();
+        }).then(dataset => {
+          if (!Array.isArray(dataset.words) || !dataset.words.length) return;
+          const text = dataset.words.join('\n');
+          const size = Module.lengthBytesUTF8(text) + 1;
+          const pointer = Module._malloc(size);
+          if (!pointer) throw new Error('Word dataset could not be loaded');
+          try {
+            Module.stringToUTF8(text, pointer, size);
+            if (!Module._racest_set_words(pointer)) throw new Error('Invalid word dataset');
+          } finally { Module._free(pointer); }
+          wordSource.textContent = dataset.source === 'bundled' ? 'Bundled words' : `Online dataset — ${dataset.words.length} words`;
+        }).catch(() => { wordSource.textContent = 'Bundled words'; }).finally(() => {
+          wordsReady = true;
+          startAgent.disabled = stopAgent.disabled = agentSpeed.disabled = false;
+        });
         fetch('/api/agent/config').then(response => response.ok ? response.json() : null).then(config => {
           if (!config) return;
           const value = String(config.wpm);

@@ -57,6 +57,9 @@ extern "C" {
 EMSCRIPTEN_KEEPALIVE void racest_set_agent(int enabled) {
     if (browserApp) browserApp->setAgentEnabled(enabled != 0);
 }
+EMSCRIPTEN_KEEPALIVE int racest_set_words(const char* words) {
+    return browserApp && words && browserApp->game.setWordBank(words);
+}
 EMSCRIPTEN_KEEPALIVE void racest_set_agent_wpm(float wpm) {
     if (browserApp && std::isfinite(wpm) && wpm >= 1 && wpm <= 600) browserApp->agent.wpm = wpm;
 }
@@ -133,6 +136,7 @@ struct Options {
     float wpm = 120.0f;
     double seconds = 300.0;
     unsigned int seed = std::random_device{}();
+    std::string wordsPath = "assets/words.txt";
 };
 
 static double number(const std::string& value, const std::string& flag) {
@@ -149,10 +153,12 @@ static Options parseOptions(int argc, char** argv) {
         if (flag == "--agent-stdio") options.stdioAgent = true;
         else if (flag == "--simulate") options.simulate = true;
         else if (flag == "--help" || flag == "-h") options.help = true;
-        else if (flag == "--agent-wpm" || flag == "--seconds" || flag == "--seed") {
+        else if (flag == "--agent-wpm" || flag == "--seconds" || flag == "--seed" || flag == "--words-file") {
             if (++i >= argc) throw std::invalid_argument("Missing value for " + flag);
             const std::string value = argv[i];
-            if (flag == "--seed") {
+            if (flag == "--words-file") {
+                options.wordsPath = value;
+            } else if (flag == "--seed") {
                 size_t consumed = 0;
                 const auto seed = std::stoull(value, &consumed);
                 if (value.empty() || value[0] == '-' || consumed != value.size() || seed > std::numeric_limits<unsigned int>::max())
@@ -175,7 +181,7 @@ static Options parseOptions(int argc, char** argv) {
 #if !defined(__EMSCRIPTEN__)
 static int simulate(const Options& options) {
     Game game(options.seed);
-    game.init(false);
+    game.init(false, options.wordsPath);
     game.start();
     game.markAssisted();
     double elapsed = 0;
@@ -201,7 +207,7 @@ int main(int argc, char** argv) {
     try { options = parseOptions(argc, argv); }
     catch (const std::exception& error) { std::fprintf(stderr, "%s\nUse --help for usage.\n", error.what()); return 1; }
     if (options.help) {
-        std::puts("Usage: racest [--seed N]\nAutonomous play: python3 src/agent/run.py [--wpm 120]\n"
+        std::puts("Usage: racest [--seed N] [--words-file PATH]\nOnline words: python3 src/words/run.py\nAutonomous play: python3 src/agent/run.py [--wpm 120]\n"
                   "Simulation: python3 src/agent/run.py --simulate [--seconds 300] [--seed N]\n"
                   "--agent-stdio is the Python launcher's internal stdin/stdout interface.");
         return 0;
@@ -214,7 +220,7 @@ int main(int argc, char** argv) {
     InitWindow(SW, SH, "RACEST");
     SetTargetFPS(60);
     static Application app(options.seed, options.wpm, options.stdioAgent);
-    app.game.init();
+    app.game.init(true, options.wordsPath);
     app.setAgentEnabled(options.stdioAgent);
 #if defined(__EMSCRIPTEN__)
     browserApp = &app;
