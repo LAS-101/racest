@@ -74,9 +74,9 @@ class AgentHandler(SimpleHTTPRequestHandler):
             self.send_error(400, str(error))
 
 
-def serve(public: Path, port=8000, wpm=120, word_source=None):
+def serve(public: Path, port=8000, wpm=120, word_source=None, host="127.0.0.1"):
     if not all((public / name).is_file() for name in ("index.html", "index.js", "index.wasm", "index.data")):
         raise RuntimeError("Browser build is missing. Run make web first.")
-    with AgentServer(("127.0.0.1", port), public, wpm, word_source) as server:
+    with AgentServer((host, port), public, wpm, word_source) as server:
         print(f"RACEST + Python agent: http://localhost:{server.server_port}", flush=True)
         server.serve_forever()

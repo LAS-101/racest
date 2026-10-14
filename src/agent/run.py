@@ -100,6 +100,8 @@ def main(argv=None):
     parser.add_argument("--seed", type=parse_seed, help="Reproducible game seed")
     parser.add_argument("--binary", type=Path, default=ROOT / "build/native/racest", help="Native game executable")
     parser.add_argument("--port", type=int, default=8000, help="Local browser server port")
+    parser.add_argument("--host", choices=("127.0.0.1", "0.0.0.0"), default="127.0.0.1",
+                        help="Browser server bind address (use 0.0.0.0 inside containers)")
     parser.add_argument("--online-words", action="store_true", help="Fetch/cache an internet word dataset")
     parser.add_argument("--refresh-words", action="store_true", help="Refresh online words now (implies --online-words)")
     options = parser.parse_args(argv)
@@ -114,7 +116,7 @@ def main(argv=None):
                 from dataset import describe, resolve_words
                 word_source = resolve_words(ROOT, options.refresh_words)
                 print(describe(word_source), file=sys.stderr)
-            serve(ROOT / "build/web/public", options.port, options.wpm, word_source)
+            serve(ROOT / "build/web/public", options.port, options.wpm, word_source, options.host)
             return 0
         return run_native(options)
     except KeyboardInterrupt:

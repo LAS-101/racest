@@ -1,4 +1,5 @@
 """Optional end-to-end smoke test: build the web game first; needs Playwright."""
+import argparse
 from pathlib import Path
 import re
 import sys
@@ -13,15 +14,23 @@ def main():
     sys.path.insert(0, str(root / "src/words"))
     from server import AgentServer
     from dataset import WordSource
-    public = root / "build/web/public"
-    if not (public / "index.wasm").exists():
-        raise RuntimeError("Build the browser game with make web first")
-    # A dataset larger than the WebAssembly stack exercises heap-based loading.
-    words = tuple("word" + chr(97 + i // 676) + chr(97 + i // 26 % 26) + chr(97 + i % 26)
-                  for i in range(10000))
-    server = AgentServer(("127.0.0.1", 0), public,
-                         word_source=WordSource(root / "data/words.online.txt", words, "cache"))
-    Thread(target=server.serve_forever, daemon=True).start()
+    parser = argparse.ArgumentParser(description="RACEST browser integration checks")
+    parser.add_argument("--url", help="Test an existing server, including a Docker container")
+    options = parser.parse_args()
+    server = None
+    if options.url:
+        base_url = options.url.rstrip("/")
+    else:
+        public = root / "build/web/public"
+        if not (public / "index.wasm").exists():
+            raise RuntimeError("Build the browser game with make web first")
+        # A dataset larger than the WebAssembly stack exercises heap-based loading.
+        words = tuple("word" + chr(97 + i // 676) + chr(97 + i // 26 % 26) + chr(97 + i % 26)
+                      for i in range(10000))
+        server = AgentServer(("127.0.0.1", 0), public,
+                             word_source=WordSource(root / "data/words.online.txt", words, "cache"))
+        Thread(target=server.serve_forever, daemon=True).start()
+        base_url = f"http://127.0.0.1:{server.server_port}"
     try:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(
@@ -34,28 +43,35 @@ def main():
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.route("**/favicon.ico", lambda route: route.fulfill(status=204))
                 page.add_init_script("localStorage.setItem('racest.highscore', '123')")
-                page.goto(f"http://127.0.0.1:{server.server_port}")
+                page.goto(base_url)
                 page.wait_for_function("!document.getElementById('start-agent').disabled")
-                assert page.locator("#word-source").inner_text() == "Online dataset — 10000 words"
-                page.evaluate("""() => {
+                dataset = page.request.get(base_url + "/api/words").json()
+                expected_words = dataset["words"]
+                expected_label = f"Online dataset — {len(expected_words)} words" if expected_words else "Bundled words"
+                assert page.locator("#word-source").inner_text() == expected_label
+                starting_wpm = page.request.get(base_url + "/api/agent/config").json()["wpm"]
+                page.evaluate("""words => {
+                    const vocabulary = new Set(words);
                     window.datasetVerified = false;
                     const original = Module.onGameObservation;
                     Module.onGameObservation = observation => {
                         if (observation.words.length) {
-                            window.datasetVerified = observation.words.every(word => word.text.startsWith('word'));
+                            window.datasetVerified = observation.words.every(word => vocabulary.has(word.text));
                         }
                         original(observation);
                     };
-                }""")
+                }""", expected_words)
                 page.locator("#start-agent").click()
-                page.wait_for_function("document.getElementById('status').textContent.includes('Python agent playing at 120 WPM')")
+                page.wait_for_function("label => document.getElementById('status').textContent.includes(label)",
+                                       arg=f"Python agent playing at {starting_wpm:g} WPM")
                 page.wait_for_function(
                     "Number(document.getElementById('status').textContent.match(/score (\\d+)/)?.[1]) > 0",
                     timeout=15000,
                 )
                 status = page.locator("#status").inner_text()
                 assert "completed" in status, status
-                assert page.evaluate("window.datasetVerified"), "Game did not use the supplied dataset"
+                if expected_words:
+                    assert page.evaluate("window.datasetVerified"), "Game did not use the supplied dataset"
                 print(status)
                 page.locator("#agent-speed").select_option("180")
                 page.wait_for_function("document.getElementById('status').textContent.includes('180 WPM')")
@@ -65,6 +81,7 @@ def main():
                 page.wait_for_function("document.getElementById('status').textContent.includes('Paused')")
                 page.locator("#canvas").focus()
                 page.wait_for_function("document.getElementById('status').textContent.includes('Python agent playing')")
+                (root / "build").mkdir(exist_ok=True)
                 page.locator("#canvas").screenshot(path=str(root / "build/agent-browser.png"))
 
                 page.locator("#stop-agent").click()
@@ -84,7 +101,7 @@ def main():
                 fallback = browser.new_page()
                 fallback.on("pageerror", lambda error: errors.append(str(error)))
                 fallback.route("**/api/words", lambda route: route.fulfill(status=503))
-                fallback.goto(f"http://127.0.0.1:{server.server_port}")
+                fallback.goto(base_url)
                 fallback.wait_for_function("!document.getElementById('start-agent').disabled")
                 assert fallback.locator("#word-source").inner_text() == "Bundled words"
                 fallback.close()
@@ -93,8 +110,9 @@ def main():
             finally:
                 browser.close()
     finally:
-        server.shutdown()
-        server.server_close()
+        if server is not None:
+            server.shutdown()
+            server.server_close()
 
 
 if __name__ == "__main__":

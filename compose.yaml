@@ -1,0 +1,30 @@
+services:
+  game:
+    platform: linux/amd64
+    build:
+      context: .
+      target: web
+    ports:
+      - "127.0.0.1:${RACEST_PORT:-8000}:8000"
+    volumes:
+      - word-cache:/app/data
+    init: true
+    command:
+      - --web
+      - --host
+      - 0.0.0.0
+      - --online-words
+      - --wpm
+      - "${RACEST_WPM:-120}"
+
+  simulation:
+    profiles: [tools]
+    build:
+      context: .
+      target: simulation
+    volumes:
+      - word-cache:/app/data
+    init: true
+
+volumes:
+  word-cache:

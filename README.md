@@ -11,6 +11,77 @@ A fast-paced typing game where words race across the screen from right to left. 
 - **High score tracking**: Persistent scores saved locally
 - **Progressive challenge**: Word length preferences adapt to player performance time
 
+## Run with Docker
+
+With Docker Engine and the Compose plugin installed (or Docker Desktop), run:
+
+```bash
+docker compose up --build
+```
+
+Open **http://localhost:8000**. Play with your keyboard or click **Start agent**.
+The container builds the WebAssembly game and runs the Python agent and online
+word service. You do not need a local C++ compiler, raylib, Python, or Emscripten.
+The first build downloads the compiler image and raylib; later builds reuse layers.
+
+The **Dockerfile** builds the web and simulation images, while **Compose**
+records the port, command, and persistent
+word-cache volume. The browser interface provides the game and agent together
+without forwarding a desktop display into a container. Multi-stage builds keep
+compilers out of the runtime images. Only the web service starts by default;
+the simulation service is enabled explicitly.
+
+Press Ctrl+C to stop, then remove the stopped containers with:
+
+```bash
+docker compose down
+```
+
+The named `word-cache` volume survives `down`; browser high scores stay in your
+browser's local storage. Downloaded words use the existing offline fallback.
+The published port is bound to localhost. To change the port or initial agent speed:
+
+```bash
+RACEST_PORT=8080 RACEST_WPM=180 docker compose up --build
+```
+
+For a headless agent evaluation, including the native build's tests:
+
+```bash
+docker compose --profile tools run --build --rm simulation
+docker compose --profile tools run --rm simulation --simulate --seconds 600 --wpm 180 --seed 42
+docker compose --profile tools run --rm simulation --simulate --online-words --seconds 60
+```
+
+The simulation image has no display requirement. Its default run uses the bundled
+word bank for reproducibility and prints a JSON result. Add `--online-words` to
+use the shared dataset cache. Refresh that cache with:
+
+```bash
+docker compose run --rm --entrypoint python game src/words/run.py --download-only --refresh-words
+docker compose restart game
+```
+
+Reload the browser after refreshing. For bundled browser words only, stop the
+regular service and run:
+
+```bash
+docker compose run --rm --service-ports game --web --host 0.0.0.0
+```
+
+You can use the Dockerfile directly as well:
+
+```bash
+docker build --platform linux/amd64 --target web -t racest:web .
+docker run --rm --init -p 127.0.0.1:8000:8000 -v racest-words:/app/data racest:web
+```
+
+The web service uses `linux/amd64` to match the pinned Emscripten image; Docker
+Desktop can emulate it on Apple Silicon, with a slower first build. The simulation
+image builds natively for the selected platform. Both runtime images run as a
+non-root user. `.dockerignore` excludes local build outputs, cached data, and
+machine-specific configuration from the build context.
+
 ## Building
 
 ### Requirements
@@ -185,6 +256,8 @@ Press **Enter** or **Space** to play again.
 ```text
 .
 ├── CMakeLists.txt          # Native and WebAssembly build definitions
+├── Dockerfile              # Web and headless simulation images
+├── compose.yaml            # Startup, ports, and persistent cache
 ├── Makefile                # Build, run, test, and serve shortcuts
 ├── README.md
 ├── assets/
