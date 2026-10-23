@@ -1,3 +1,5 @@
+![RACEST title screen with a starfield background and a prompt to press Enter to start](assets/racest-title-screen.png)
+
 # RACEST — A Space Typing Game
 
 A fast-paced typing game where words race across the screen from right to left. Type them before they reach the danger zone on the left!
