@@ -25,10 +25,13 @@ if(NOT TARGET raylib)
     FetchContent_MakeAvailable(raylib)
 endif()
 
+file(GLOB RACEST_SOUNDS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/assets/sounds/*.mp3")
+
 add_executable(racest
     src/game/main.cpp
     src/game/game.cpp
     src/game/renderer.cpp
+    src/game/audio.cpp
     src/game/game_bridge.cpp
 )
 target_link_libraries(racest PRIVATE raylib)
@@ -48,12 +51,17 @@ if(EMSCRIPTEN)
         "-sEXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8"
         "SHELL:--shell-file \"${CMAKE_SOURCE_DIR}/web/shell.html\""
         "SHELL:--preload-file \"${CMAKE_SOURCE_DIR}/assets/words.txt@/assets/words.txt\""
+        "SHELL:--preload-file \"${CMAKE_SOURCE_DIR}/assets/sounds@/assets/sounds\""
     )
     set_property(TARGET racest APPEND PROPERTY LINK_DEPENDS
-        "${CMAKE_SOURCE_DIR}/web/shell.html" "${CMAKE_SOURCE_DIR}/assets/words.txt")
+        "${CMAKE_SOURCE_DIR}/web/shell.html" "${CMAKE_SOURCE_DIR}/assets/words.txt" ${RACEST_SOUNDS})
 else()
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/assets")
     configure_file(assets/words.txt assets/words.txt COPYONLY)
+    foreach(sound IN LISTS RACEST_SOUNDS)
+        get_filename_component(sound_name "${sound}" NAME)
+        configure_file("${sound}" "assets/sounds/${sound_name}" COPYONLY)
+    endforeach()
     include(CTest)
     if(BUILD_TESTING)
         add_executable(game_tests tests/game/game_tests.cpp src/game/game.cpp)

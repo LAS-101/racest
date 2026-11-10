@@ -83,6 +83,11 @@
         event.preventDefault();
       }
     });
+    // raylib's audio backend only resumes Web Audio on click/tap; keyboard
+    // players start with Enter, so a key press must unlock sound as well.
+    document.addEventListener('keydown', () => {
+      if (window.miniaudio && typeof window.miniaudio.unlock === 'function') window.miniaudio.unlock();
+    }, true);
     canvas.addEventListener('webglcontextlost', event => {
       event.preventDefault();
       status.textContent = 'Graphics context lost. Reload the page to play again.';

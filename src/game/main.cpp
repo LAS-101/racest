@@ -1,5 +1,6 @@
 #include "raylib.h"
 #include "types.h"
+#include "audio.h"
 #include "game.h"
 #include "game_bridge.h"
 #include "renderer.h"
@@ -27,6 +28,7 @@ EM_JS(void, publishBrowserObservation, (const char* json), {
 struct Application {
     Game game;
     Renderer renderer;
+    Audio audio;
     AgentStatus agent;
     GameInput pendingInput;
     int round = 0;
@@ -115,6 +117,7 @@ static void updateFrame(void* context) {
             app.game.update(dt, keyboard);
         }
     }
+    app.audio.update(app.game, dt);
     BeginDrawing();
     ClearBackground(COL_BG);
     app.renderer.drawFrame(app.game, (float)GetTime(), app.agent);
@@ -221,12 +224,14 @@ int main(int argc, char** argv) {
     SetTargetFPS(60);
     static Application app(options.seed, options.wpm, options.stdioAgent);
     app.game.init(true, options.wordsPath);
+    app.audio.init();
     app.setAgentEnabled(options.stdioAgent);
 #if defined(__EMSCRIPTEN__)
     browserApp = &app;
     emscripten_set_main_loop_arg(updateFrame, &app, 0, true);
 #else
     while (!WindowShouldClose()) updateFrame(&app);
+    app.audio.shutdown();
     CloseWindow();
 #endif
     return 0;

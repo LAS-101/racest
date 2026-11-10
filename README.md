@@ -252,6 +252,12 @@ Press **Enter** or **Space** to play again.
 - **Real-time HUD**: Score, time, and best score
 - **Adaptive difficulty**: Word selection based on elapsed time
 - **Persistent high scores**: Saved to `data/highscore.dat` on desktop or browser local storage on web
+- **Sound effects** (`assets/sounds/`):
+  - Super Mario Bros. theme loops on the title screen and fades out when you start playing
+    (in the browser it starts on your first click or key press)
+  - Jump sound for every finished word
+  - Coin sound every 500 points
+  - Death jingle when a word reaches the danger zone, followed by the game-over theme
 
 ## Project Structure
 
@@ -263,6 +269,7 @@ Press **Enter** or **Space** to play again.
 ├── Makefile                # Build, run, test, and serve shortcuts
 ├── README.md
 ├── assets/
+│   ├── sounds/             # Sound effects (MP3)
 │   └── words.txt           # Shared game word bank
 ├── data/
 │   ├── highscore.dat       # Local saved score (ignored by Git)
@@ -273,6 +280,7 @@ Press **Enter** or **Space** to play again.
 │   │   ├── main.cpp
 │   │   ├── game.h / game.cpp
 │   │   ├── renderer.h / renderer.cpp
+│   │   ├── audio.h / audio.cpp
 │   │   ├── types.h
 │   │   └── game_bridge.h / game_bridge.cpp
 │   ├── agent/              # Python decisions and launch tools
@@ -296,6 +304,7 @@ Press **Enter** or **Space** to play again.
 
 - **Modular design**: Separated game logic (`src/game/game.cpp`), rendering (`src/game/renderer.cpp`), and types (`src/game/types.h`)
 - **Game state**: Owned by the `Game` class; `Renderer` draws it and the Python agent observes it through `game_bridge`.
+- **Audio**: `Audio` (`src/game/audio.cpp`) plays sounds by comparing game state between frames, so the game logic and headless simulations never touch the audio device.
 - **Spawn rate scaling**: Gradually reduces spawn interval from 3.3s to 1.1s
 - **Speed curve**: Word speed ramps from ~88 px/s to ~270 px/s
 - **Word selection**: Pool filtered by length, preferring longer words as time progresses
@@ -361,6 +370,9 @@ This project is provided as-is for educational and personal use.
 ## Credits
 
 Built with [raylib](https://www.raylib.com/) — a simple and easy-to-use library to enjoy videogames programming.
+
+Sound effects are from the *Super Mario Bros.* series (© Nintendo), downloaded from
+[Myinstants](https://www.myinstants.com/). They are not covered by this project's license.
 
 ---
 
